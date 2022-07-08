@@ -1,18 +1,5 @@
 const Sauce = require('../models/Sauce')
-
-// exports.createSauce = (req, res, next) => {
-//   const sauceObject = JSON.parse(req.body.sauce);
-//   delete sauceObject._id;
-//   delete sauceObject._userId;
-//   const sauce = new Sauce({
-//     ...sauceObject,
-//     userId: req.auth.userId,
-//     imageUrl: `${req.protocol}://${req.get('host')}/image/${req.file.filename}`
-//   });
-//   sauce.save()
-//   .then(() => {req.status(201).json({message: 'Objet enregistré !'})})
-//   .catch(error => {res.status(400).json( { error } )})
-// };
+const fs = require('fs');
 
 exports.createSauce = (req, res, next) => {
    const sauceObject = JSON.parse(req.body.sauce);
@@ -26,12 +13,12 @@ exports.createSauce = (req, res, next) => {
 
    sauce.save()
    .then(() => { res.status(201).json({message: 'Objet enregistré !'})})
-   .catch(error => { res.status(400).json( { error })})
+   .catch(error => { res.status(400).json({message: "Problème d'enregistrement de la sauce créé !"})})
 };
 
 exports.modifySauce = (req, res, next) => {
   const sauceObject = req.file ? {
-    ...JSON.parese(req.body.sauce),
+    ...JSON.parse(req.body.sauce),
     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
   } : { ...req.body };
 
@@ -42,34 +29,44 @@ exports.modifySauce = (req, res, next) => {
       res.status(401).json({ message : 'Non aurorisé !'})
     } else {
       Sauce.updateOne({_id: req.params.id}, { ...sauceObject, _id: req.params.id})
-      .then(()=> res.status(200).json({message : 'Objet modifié'}))
-      .catch(error => res.status(401).json({ error }));
+      .then(()=> res.status(200).json({message : 'Objet modifié !'}))
+      .catch(error => res.status(401).json({message : "Problème de mise à jour des données de votre sauce !" }));
     }
   })
   .catch((error)=>{
-    res.status(400).json({error});
+    res.status(400).json({message : "Problème de mise à jour de cette sauce, verifiez que vous en êtes l'auteur."});
   })
-  // sauce.updateOne({_id: req.params.id}, { ...req.body, _id: req.params.id})
-  //   .then(() => res.status(201).json({message: "Sauce modifiée !"}))
-  //   .catch(error => res.status(404).json({ error }));
 };
 
 exports.deleteSauce =  (req, res, next)=>{
-  sauce.deleteOne({_id: req.params.id})
-    .then(() => res.status(200).json({message: "Sauce Supprimé !"}))
-    .catch(error => res.status(400).json({ error }));
+  Sauce.findOne({_id: req.params.id})
+    .then(sauce => {
+      if (sauce.userId != req.auth.userId) {
+        res.status(401).json({message: 'Non-autorisé !'});
+      } else {
+        const filename = sauce.imageUrl.split('/images/')[1];
+        fs.unlink(`images/${filename}`, () => {
+          Sauce.deleteOne({_id: req.params.id})
+            .then(() => { res.status(200).json({message: 'Objet supprimé !'})})
+            .catch( error => res.status(401).json({ message : "Problème pour récupérer la sauce à suppprimer !" }));
+        });
+      }
+    })
+    .catch( error => {
+      res.status(500).json({ message : "Problème de suppression de la sauce" });
+    });
 };
 
 exports.getOneSauce = (req, res, next) => {
   sauce.findOne({_id: req.params.id})
     .then(() => res.status(201).json(sauce))
-    .catch(error => res.status(404).json({ error }));
+    .catch(error => res.status(404).json({ message: "Problème d'identification de la sauce !" }));
 };
 
 exports.getAllSauces = (req, res, next)=> {
   Sauce.find()
     .then(sauces => res.status(200).json(sauces))
-    .catch(error => res.status(400).json({error}))
+    .catch(error => res.status(400).json({message : "Problème de récupération de l'ensemble des sauces !"}))
 };
 
 //exports.likeDislike = (req, res, next) => {
