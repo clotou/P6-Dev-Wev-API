@@ -4,16 +4,18 @@ const fs = require('fs');
 exports.createSauce = (req, res, next) => {
    const sauceObject = JSON.parse(req.body.sauce);
    delete sauceObject._id;
-   delete sauceObject._userId;
    const sauce = new Sauce({
        ...sauceObject,
-       userId: req.auth.userId,
-       imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
+       imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`,
+        likes: 0,
+        dislikes: 0,
+        usersLiked: [],
+        usersDisliked: []
    });
-
+  console.log(sauce);
    sauce.save()
-   .then(() => { res.status(201).json({message: 'Objet enregistré !'})})
-   .catch(error => { res.status(400).json({message: "Problème d'enregistrement de la sauce créé !"})})
+   .then(() =>  res.status(201).json({message: 'Objet enregistré !'}))
+   .catch(error =>  res.status(400).json({message: "Problème d'enregistrement de la sauce créé !"}))
 };
 
 exports.modifySauce = (req, res, next) => {
@@ -22,44 +24,21 @@ exports.modifySauce = (req, res, next) => {
     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
   } : { ...req.body };
 
-  delete sauceObject._userId;
-  Sauce.findOne({_id: req.params.id})
-  .then((sauce) => {
-    if(sauce.userId != req.auth.userId) {
-      res.status(401).json({ message : 'Non aurorisé !'})
-    } else {
-      Sauce.updateOne({_id: req.params.id}, { ...sauceObject, _id: req.params.id})
-      .then(()=> res.status(200).json({message : 'Objet modifié !'}))
+   Sauce.updateOne({_id: req.params.id}, { ...sauceObject, _id: req.params.id})
+      .then(()=> res.status(200).json({message : 'Sauce modifiée !'}))
       .catch(error => res.status(401).json({message : "Problème de mise à jour des données de votre sauce !" }));
-    }
-  })
-  .catch((error)=>{
-    res.status(400).json({message : "Problème de mise à jour de cette sauce, verifiez que vous en êtes l'auteur."});
-  })
 };
 
 exports.deleteSauce =  (req, res, next)=>{
-  Sauce.findOne({_id: req.params.id})
-    .then(sauce => {
-      if (sauce.userId != req.auth.userId) {
-        res.status(401).json({message: 'Non-autorisé !'});
-      } else {
-        const filename = sauce.imageUrl.split('/images/')[1];
-        fs.unlink(`images/${filename}`, () => {
-          Sauce.deleteOne({_id: req.params.id})
+
+   Sauce.deleteOne({_id: req.params.id})
             .then(() => { res.status(200).json({message: 'Objet supprimé !'})})
             .catch( error => res.status(401).json({ message : "Problème pour récupérer la sauce à suppprimer !" }));
-        });
-      }
-    })
-    .catch( error => {
-      res.status(500).json({ message : "Problème de suppression de la sauce" });
-    });
 };
 
 exports.getOneSauce = (req, res, next) => {
-  sauce.findOne({_id: req.params.id})
-    .then(() => res.status(201).json(sauce))
+  Sauce.findOne({_id: req.params.id})
+    .then((Sauce) => res.status(201).json(Sauce))
     .catch(error => res.status(404).json({ message: "Problème d'identification de la sauce !" }));
 };
 
@@ -69,8 +48,36 @@ exports.getAllSauces = (req, res, next)=> {
     .catch(error => res.status(400).json({message : "Problème de récupération de l'ensemble des sauces !"}))
 };
 
-//exports.likeDislike = (req, res, next) => {
-//   sauce.findOne({_id: req.params.id})
-//     .then(() => res.status(201).json(sauce))
-//     .catch(error => res.status(404).json({ error }));
-// };
+exports.likeDislike = (req, res, next) => {
+    if (req.body.like === 1) {
+        Sauce.updateOne({_id: req.params.id}, {
+          likes: req.body.like++,
+          usersLiked: req.body.userId })
+            .then(sauce => res.status(200).json({message: 'Like ajouté !'}))
+            .catch(error => res.status(400).json({message: "Problème d'ajout du like !"}))
+    } else if (req.body.like === -1) {
+        Sauce.updateOne({ _id: req.params.id }, {
+          dislikes: (req.body.like++) * -1,
+          usersDisliked: req.body.userId })
+            .then(sauce => res.status(200).json({message: 'Dislike ajouté !'}))
+            .catch(error => res.status(400).json({message: "Problème d'ajout du dislike !"}))
+    }
+    else {
+        Sauce.findOne({ _id: req.params.id })
+            .then(sauce => {
+                if (sauce.usersLiked.includes(req.body.userId)) {
+                    Sauce.updateOne({ _id: req.params.id },{
+                    usersLiked: req.body.userId,
+                    likes: -1 })
+                        .then(sauce => { res.status(200).json({message: 'Like supprimé !'}) })
+                        .catch(error => res.status(400).json({message: "Problème de suppression du like !"}))
+                } else if (sauce.usersDisliked.includes(req.body.userId)) {
+                    Sauce.updateOne({ _id: req.params.id }, { usersDisliked: req.body.userId,
+                      dislikes: -1 })
+                        .then(sauce => { res.status(200).json({message: 'Dislike supprimé !'}) })
+                        .catch(error => res.status(400).json({message: "Problème de suppression du dislike !"}))
+                }
+            })
+            .catch(error => res.status(400).json({ message: "Problème d'identification de la sauce pour le vote !" }))
+    }
+};
