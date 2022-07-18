@@ -24,7 +24,6 @@ exports.modifySauce = (req, res, next) => {
   } : { ...req.body };
 
 if(req.body.userId == sauceObject.userId) {
-  console.log(sauceObject.userId);
    Sauce.updateOne({_id: req.params.id}, { ...sauceObject, _id: req.params.id})
       .then(()=> res.status(200).json({message : 'Sauce modifiée !'}))
       .catch(error => res.status(401).json({message : "Problème de mise à jour des données de votre sauce !" }));
